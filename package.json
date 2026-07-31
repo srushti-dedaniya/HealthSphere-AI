@@ -1,0 +1,14 @@
+{
+  "name": "healthsphere-ai",
+  "private": true,
+  "version": "1.0.0",
+  "description": "HealthSphere AI - Enterprise healthcare intelligence platform",
+  "workspaces": ["client", "server"],
+  "scripts": {
+    "dev": "npm run dev --workspace client",
+    "build": "npm run build --workspace client",
+    "preview": "npm run preview --workspace client",
+    "typecheck": "npm run typecheck --workspaces"
+  },
+  "license": "MIT"
+}
