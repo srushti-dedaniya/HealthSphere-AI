@@ -1,26 +1,50 @@
 import { useState } from 'react';
 import { Icon } from '@/components/ui/Icon';
+import {
+  COUNTRY_CODE,
+  isValidMobileNumber,
+  normalizeMobileInput,
+  validateDocument,
+} from '@/utils/validation';
 
 interface DoctorDetailsFormProps {
-  onSubmit: () => void;
+  onSubmit: (data: { email: string; mobile: string }) => void;
   onBack: () => void;
 }
 
-function DragZone({ icon, onFile }: { icon: string; onFile: (name: string) => void }) {
-  const [file, setFile] = useState<string | null>(null);
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+type DocumentKind = 'license' | 'degree';
+
+const MAX_DOCUMENT_SIZE_MB = 5;
+
+function DragZone({
+  icon,
+  kind,
+  label,
+  file,
+  error,
+  onFileChange,
+}: {
+  icon: string;
+  kind: DocumentKind;
+  label: string;
+  file: File | null;
+  error: string | null;
+  onFileChange: (kind: DocumentKind, file: File | null) => void;
+}) {
   const [dragging, setDragging] = useState(false);
 
-  const handleFile = (name: string) => {
-    setFile(name);
-    onFile(name);
+  const handleFile = (selected: File | null) => {
+    onFileChange(kind, selected);
   };
 
   return (
     <div
-      className={`drag-dash rounded-xl p-8 flex flex-col items-center justify-center bg-surface hover:bg-primary/5 transition-colors cursor-pointer group ${
+      className={`drag-dash rounded-xl p-8 flex flex-col items-center justify-center bg-surface hover:bg-primary/5 transition-colors cursor-pointer group border-2 border-dashed ${
         dragging ? 'bg-primary/10' : ''
-      }`}
-      onClick={() => document.getElementById(`upload-${icon}`)?.click()}
+      } ${error ? 'border-error' : 'border-outline-variant/50 hover:border-primary'}`}
+      onClick={() => document.getElementById(`upload-${kind}`)?.click()}
       onDragOver={(e) => {
         e.preventDefault();
         setDragging(true);
@@ -30,28 +54,37 @@ function DragZone({ icon, onFile }: { icon: string; onFile: (name: string) => vo
         e.preventDefault();
         setDragging(false);
         const f = e.dataTransfer.files[0];
-        if (f) handleFile(f.name);
+        if (f) handleFile(f);
       }}
     >
       <Icon
-        name={file ? 'check_circle' : icon}
-        className={`${file ? 'text-secondary' : 'text-outline group-hover:text-primary'} transition-colors text-3xl mb-2`}
+        name={file && !error ? 'check_circle' : icon}
+        className={`${file && !error ? 'text-secondary' : error ? 'text-error' : 'text-outline group-hover:text-primary'} transition-colors text-3xl mb-2`}
       />
       <p className="font-body-sm text-on-surface-variant text-center">
         {file ? (
-          <span className="text-secondary font-medium">{file}</span>
+          <span className={error ? 'text-error font-medium' : 'text-secondary font-medium'}>{file.name}</span>
         ) : (
           <>
             Drag and drop or <span className="text-primary font-medium">browse</span>
           </>
         )}
       </p>
-      <p className="text-[10px] text-outline mt-1 uppercase tracking-tight">Max size 5MB</p>
+      <p className="text-[10px] text-outline mt-1 uppercase tracking-tight">
+        {label} · PDF, PNG, JPG · Max {MAX_DOCUMENT_SIZE_MB}MB
+      </p>
+      {error && (
+        <p className="text-error font-body-sm mt-2 flex items-center gap-1">
+          <Icon name="error" className="text-[16px]" />
+          {error}
+        </p>
+      )}
       <input
         className="hidden"
-        id={`upload-${icon}`}
+        id={`upload-${kind}`}
         type="file"
-        onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0].name)}
+        accept=".pdf,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg"
+        onChange={(e) => handleFile(e.target.files?.[0] ?? null)}
       />
     </div>
   );
@@ -59,11 +92,73 @@ function DragZone({ icon, onFile }: { icon: string; onFile: (name: string) => vo
 
 export function DoctorDetailsForm({ onSubmit, onBack }: DoctorDetailsFormProps) {
   const [submitting, setSubmitting] = useState(false);
+  const [email, setEmail] = useState('');
+  const [emailError, setEmailError] = useState<string | null>(null);
+  const [mobile, setMobile] = useState('');
+  const [mobileError, setMobileError] = useState<string | null>(null);
+  const [documents, setDocuments] = useState<Record<DocumentKind, File | null>>({
+    license: null,
+    degree: null,
+  });
+  const [documentErrors, setDocumentErrors] = useState<Record<DocumentKind, string | null>>({
+    license: null,
+    degree: null,
+  });
+
+  const handleEmailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setEmail(value);
+    if (value && !EMAIL_PATTERN.test(value)) {
+      setEmailError('Enter a valid email address.');
+    } else {
+      setEmailError(null);
+    }
+  };
+
+  const handleMobileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = normalizeMobileInput(e.target.value);
+    setMobile(value);
+    if (value && !isValidMobileNumber(value)) {
+      setMobileError('Enter a valid 10-digit mobile number.');
+    } else {
+      setMobileError(null);
+    }
+  };
+
+  const handleDocumentChange = (kind: DocumentKind, file: File | null) => {
+    setDocuments((prev) => ({ ...prev, [kind]: file }));
+    setDocumentErrors((prev) => ({
+      ...prev,
+      [kind]: file ? validateDocument(file, kind) : 'Upload a proper document.',
+    }));
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+
+    let valid = true;
+    if (!EMAIL_PATTERN.test(email)) {
+      setEmailError('Enter a valid email address.');
+      valid = false;
+    }
+    if (!isValidMobileNumber(mobile)) {
+      setMobileError('Enter a valid 10-digit mobile number.');
+      valid = false;
+    }
+
+    (['license', 'degree'] as DocumentKind[]).forEach((kind) => {
+      const file = documents[kind];
+      const error = file ? validateDocument(file, kind) : 'Upload a proper document.';
+      if (error) {
+        setDocumentErrors((prev) => ({ ...prev, [kind]: error }));
+        valid = false;
+      }
+    });
+
+    if (!valid) return;
+
     setSubmitting(true);
-    setTimeout(onSubmit, 800);
+    setTimeout(() => onSubmit({ email, mobile }), 800);
   };
 
   return (
@@ -88,16 +183,46 @@ export function DoctorDetailsForm({ onSubmit, onBack }: DoctorDetailsFormProps) 
           </div>
           <div className="space-y-2">
             <label className="font-label-md text-on-surface-variant">Email Address</label>
-            <input className="w-full px-4 py-3 rounded-lg border border-outline-variant bg-surface-container-low focus:ring-2 focus:ring-primary/20 transition-all font-body-md" placeholder="j.smith@medical-center.com" type="email" />
+            <input
+              className={`w-full px-4 py-3 rounded-lg border bg-surface-container-low focus:ring-2 focus:ring-primary/20 transition-all font-body-md ${
+                emailError ? 'border-error' : 'border-outline-variant'
+              }`}
+              placeholder="j.smith@medical-center.com"
+              type="email"
+              value={email}
+              onChange={handleEmailChange}
+            />
+            {emailError && (
+              <p className="text-error font-body-sm flex items-center gap-1">
+                <Icon name="error" className="text-[16px]" />
+                {emailError}
+              </p>
+            )}
           </div>
           <div className="space-y-2">
             <label className="font-label-md text-on-surface-variant">Mobile Number</label>
             <div className="flex">
-              <span className="inline-flex items-center px-3 rounded-l-lg border border-r-0 border-outline-variant bg-surface-container-high text-on-surface-variant font-body-sm">
-                +1
+              <span className="inline-flex items-center px-3 rounded-l-lg border border-r-0 border-outline-variant bg-surface-container-high text-on-surface-variant font-body-md font-semibold tracking-wide">
+                {COUNTRY_CODE}
               </span>
-              <input className="w-full px-4 py-3 rounded-r-lg border border-outline-variant bg-surface-container-low focus:ring-2 focus:ring-primary/20 transition-all font-body-md" placeholder="(555) 000-0000" type="tel" />
+              <input
+                className={`w-full px-4 py-3 rounded-r-lg border bg-surface-container-low focus:ring-2 focus:ring-primary/20 transition-all font-body-md ${
+                  mobileError ? 'border-error' : 'border-outline-variant'
+                }`}
+                placeholder="10-digit mobile number"
+                type="tel"
+                inputMode="numeric"
+                maxLength={10}
+                value={mobile}
+                onChange={handleMobileChange}
+              />
             </div>
+            {mobileError && (
+              <p className="text-error font-body-sm flex items-center gap-1">
+                <Icon name="error" className="text-[16px]" />
+                {mobileError}
+              </p>
+            )}
           </div>
           <div className="space-y-2">
             <label className="font-label-md text-on-surface-variant">Hospital/Clinic Name</label>
@@ -141,11 +266,25 @@ export function DoctorDetailsForm({ onSubmit, onBack }: DoctorDetailsFormProps) 
           </div>
           <div className="space-y-2">
             <label className="font-label-md text-on-surface-variant">Medical License (PDF/JPG)</label>
-            <DragZone icon="upload_file" onFile={() => {}} />
+            <DragZone
+              icon="upload_file"
+              kind="license"
+              label="License"
+              file={documents.license}
+              error={documentErrors.license}
+              onFileChange={handleDocumentChange}
+            />
           </div>
           <div className="space-y-2">
             <label className="font-label-md text-on-surface-variant">Medical Degree (Scan)</label>
-            <DragZone icon="school" onFile={() => {}} />
+            <DragZone
+              icon="school"
+              kind="degree"
+              label="Degree"
+              file={documents.degree}
+              error={documentErrors.degree}
+              onFileChange={handleDocumentChange}
+            />
           </div>
 
           <div className="col-span-2 pt-4">

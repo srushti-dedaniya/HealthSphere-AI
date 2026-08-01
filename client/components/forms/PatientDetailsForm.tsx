@@ -1,20 +1,92 @@
 import { useState } from 'react';
 import { Icon } from '@/components/ui/Icon';
+import {
+  COUNTRY_CODE,
+  isValidMobileNumber,
+  normalizeMobileInput,
+  validateDocument,
+} from '@/utils/validation';
 
 interface PatientDetailsFormProps {
-  onSubmit: () => void;
+  onSubmit: (data: { email: string; mobile: string }) => void;
   onBack: () => void;
 }
 
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 export function PatientDetailsForm({ onSubmit, onBack }: PatientDetailsFormProps) {
-  const [file, setFile] = useState<string | null>(null);
+  const [file, setFile] = useState<File | null>(null);
+  const [docType, setDocType] = useState('aadhaar');
+  const [docError, setDocError] = useState<string | null>(null);
+  const [email, setEmail] = useState('');
+  const [emailError, setEmailError] = useState<string | null>(null);
+  const [mobile, setMobile] = useState('');
+  const [mobileError, setMobileError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  const handleEmailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setEmail(value);
+    if (value && !EMAIL_PATTERN.test(value)) {
+      setEmailError('Enter a valid email address.');
+    } else {
+      setEmailError(null);
+    }
+  };
+
+  const handleMobileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = normalizeMobileInput(e.target.value);
+    setMobile(value);
+    if (value && !isValidMobileNumber(value)) {
+      setMobileError('Enter a valid 10-digit mobile number.');
+    } else {
+      setMobileError(null);
+    }
+  };
+
+  const handleDocTypeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    setDocType(e.target.value);
+    setDocError(null);
+  };
+
+  const handleFileChange = (selected: File | null) => {
+    setFile(selected);
+    if (!selected) {
+      setDocError('Upload a proper document.');
+      return;
+    }
+    const error = validateDocument(selected, docType as 'aadhaar' | 'passport' | 'dl');
+    setDocError(error);
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+
+    let valid = true;
+    if (!EMAIL_PATTERN.test(email)) {
+      setEmailError('Enter a valid email address.');
+      valid = false;
+    }
+    if (!isValidMobileNumber(mobile)) {
+      setMobileError('Enter a valid 10-digit mobile number.');
+      valid = false;
+    }
+    const fileError = validateDocument(file as File, docType as 'aadhaar' | 'passport' | 'dl');
+    if (fileError) {
+      setDocError(fileError);
+      valid = false;
+    }
+
+    if (!valid) return;
+
     setSubmitting(true);
-    setTimeout(onSubmit, 800);
+    setTimeout(() => onSubmit({ email, mobile }), 800);
   };
+
+  const inputClass = (hasError: boolean) =>
+    `w-full bg-surface-container-low border rounded-lg px-4 py-3 text-body-md focus:bg-white transition-all ${
+      hasError ? 'border-error focus:ring-2 focus:ring-error/20' : 'border-outline-variant'
+    }`;
 
   return (
     <div className="bg-surface-container-lowest rounded-xl shadow-sm border border-outline-variant/20 p-card-padding">
@@ -28,7 +100,7 @@ export function PatientDetailsForm({ onSubmit, onBack }: PatientDetailsFormProps
             <div className="space-y-2">
               <label className="font-label-md text-label-md text-on-surface-variant ml-1">Full Name</label>
               <input
-                className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-4 py-3 text-body-md focus:bg-white transition-all"
+                className={inputClass(false)}
                 placeholder="e.g. Alexander Thompson"
                 type="text"
               />
@@ -36,24 +108,47 @@ export function PatientDetailsForm({ onSubmit, onBack }: PatientDetailsFormProps
             <div className="space-y-2">
               <label className="font-label-md text-label-md text-on-surface-variant ml-1">Email Address</label>
               <input
-                className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-4 py-3 text-body-md focus:bg-white transition-all"
+                className={inputClass(!!emailError)}
                 placeholder="alex.thompson@healthsphere.ai"
                 type="email"
+                value={email}
+                onChange={handleEmailChange}
               />
+              {emailError && (
+                <p className="text-error text-body-sm font-body-sm flex items-center gap-1 ml-1">
+                  <Icon name="error" className="text-[16px]" />
+                  {emailError}
+                </p>
+              )}
             </div>
             <div className="space-y-2">
               <label className="font-label-md text-label-md text-on-surface-variant ml-1">Mobile Number</label>
-              <input
-                className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-4 py-3 text-body-md focus:bg-white transition-all"
-                placeholder="+1 (555) 000-0000"
-                type="tel"
-              />
+              <div className="flex">
+                <span className="inline-flex items-center px-4 rounded-l-lg border border-r-0 bg-surface-container-high text-on-surface-variant font-body-md font-semibold tracking-wide">
+                  {COUNTRY_CODE}
+                </span>
+                <input
+                  className={`${inputClass(!!mobileError)} rounded-l-none border-l-0`}
+                  placeholder="10-digit mobile number"
+                  type="tel"
+                  inputMode="numeric"
+                  maxLength={10}
+                  value={mobile}
+                  onChange={handleMobileChange}
+                />
+              </div>
+              {mobileError && (
+                <p className="text-error text-body-sm font-body-sm flex items-center gap-1 ml-1">
+                  <Icon name="error" className="text-[16px]" />
+                  {mobileError}
+                </p>
+              )}
             </div>
             <div className="space-y-2">
               <label className="font-label-md text-label-md text-on-surface-variant ml-1">Date of Birth</label>
               <div className="relative">
                 <input
-                  className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-4 py-3 text-body-md focus:bg-white transition-all"
+                  className={inputClass(false)}
                   type="date"
                 />
                 <Icon
@@ -104,11 +199,11 @@ export function PatientDetailsForm({ onSubmit, onBack }: PatientDetailsFormProps
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-gutter gap-y-6">
             <div className="space-y-2">
               <label className="font-label-md text-label-md text-on-surface-variant ml-1">Password</label>
-              <input className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-4 py-3 text-body-md focus:bg-white transition-all" placeholder="••••••••" type="password" />
+              <input className={inputClass(false)} placeholder="••••••••" type="password" />
             </div>
             <div className="space-y-2">
               <label className="font-label-md text-label-md text-on-surface-variant ml-1">Confirm Password</label>
-              <input className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-4 py-3 text-body-md focus:bg-white transition-all" placeholder="••••••••" type="password" />
+              <input className={inputClass(false)} placeholder="••••••••" type="password" />
             </div>
           </div>
         </section>
@@ -125,14 +220,20 @@ export function PatientDetailsForm({ onSubmit, onBack }: PatientDetailsFormProps
               <label className="font-label-md text-label-md text-on-surface-variant ml-1">
                 Document Type
               </label>
-              <select className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-4 py-3 text-body-md focus:bg-white transition-all">
+              <select
+                className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-4 py-3 text-body-md focus:bg-white transition-all"
+                value={docType}
+                onChange={handleDocTypeChange}
+              >
                 <option value="aadhaar">Aadhaar Card</option>
                 <option value="passport">International Passport</option>
                 <option value="dl">Driver's License</option>
               </select>
             </div>
             <div
-              className="border-2 border-dashed border-outline-variant/50 rounded-xl bg-surface p-10 text-center transition-all hover:border-primary group cursor-pointer"
+              className={`border-2 border-dashed rounded-xl bg-surface p-10 text-center transition-all hover:border-primary group cursor-pointer ${
+                docError ? 'border-error' : 'border-outline-variant/50'
+              }`}
               onClick={() => document.getElementById('file-input')?.click()}
             >
               <div className="flex flex-col items-center">
@@ -140,7 +241,7 @@ export function PatientDetailsForm({ onSubmit, onBack }: PatientDetailsFormProps
                   <Icon name="cloud_upload" className="text-4xl" filled />
                 </div>
                 <p className="font-headline-md text-headline-md mb-1">
-                  {file ?? 'Drag and drop document'}
+                  {file?.name ?? 'Drag and drop document'}
                 </p>
                 <p className="text-on-surface-variant text-body-sm font-body-sm">
                   Supported formats: PDF, PNG, JPG (Max 5MB)
@@ -153,9 +254,16 @@ export function PatientDetailsForm({ onSubmit, onBack }: PatientDetailsFormProps
                 className="hidden"
                 id="file-input"
                 type="file"
-                onChange={(e) => e.target.files?.[0] && setFile(e.target.files[0].name)}
+                accept=".pdf,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg"
+                onChange={(e) => handleFileChange(e.target.files?.[0] ?? null)}
               />
             </div>
+            {docError && (
+              <p className="text-error text-body-sm font-body-sm flex items-center gap-1 ml-1">
+                <Icon name="error" className="text-[16px]" />
+                {docError}
+              </p>
+            )}
           </div>
         </section>
 

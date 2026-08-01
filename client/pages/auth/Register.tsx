@@ -3,9 +3,15 @@ import { useNavigate, Link } from 'react-router-dom';
 import { Icon } from '@/components/ui/Icon';
 import { PatientDetailsForm } from '@/components/forms/PatientDetailsForm';
 import { DoctorDetailsForm } from '@/components/forms/DoctorDetailsForm';
+import { OtpVerification } from '@/components/forms/OtpVerification';
 import type { Role } from '@/types/auth';
 
-type Step = 1 | 2;
+export interface RegistrationContact {
+  email: string;
+  mobile: string;
+}
+
+type Step = 1 | 2 | 3;
 
 const ROLE_CARDS = [
   {
@@ -33,9 +39,15 @@ const ROLE_CARDS = [
 export default function Register() {
   const [step, setStep] = useState<Step>(1);
   const [role, setRole] = useState<Role | null>(null);
+  const [contact, setContact] = useState<RegistrationContact>({ email: '', mobile: '' });
   const navigate = useNavigate();
 
   const complete = () => navigate('/verification-pending');
+
+  const handleDetailsSubmit = (data: RegistrationContact) => {
+    setContact(data);
+    setStep(3);
+  };
 
   return (
     <div className="bg-background text-on-surface min-h-screen font-body-md flex flex-col">
@@ -55,7 +67,7 @@ export default function Register() {
           <div className="w-48 h-1.5 bg-surface-container rounded-full overflow-hidden">
             <div
               className="progress-bar h-full bg-secondary rounded-full transition-all duration-500"
-              style={{ width: `${step === 1 ? 33 : 66}%` }}
+              style={{ width: `${step === 1 ? 33 : step === 2 ? 66 : 100}%` }}
             />
           </div>
         </div>
@@ -128,12 +140,42 @@ export default function Register() {
             </div>
           </div>
           {role === 'doctor' ? (
-            <DoctorDetailsForm onBack={() => setStep(1)} onSubmit={complete} />
+            <DoctorDetailsForm onBack={() => setStep(1)} onSubmit={handleDetailsSubmit} />
           ) : (
             <div className="max-w-[1000px] mx-auto">
-              <PatientDetailsForm onBack={() => setStep(1)} onSubmit={complete} />
+              <PatientDetailsForm onBack={() => setStep(1)} onSubmit={handleDetailsSubmit} />
             </div>
           )}
+        </main>
+      )}
+
+      {step === 3 && (
+        <main className="flex-grow py-12 px-gutter">
+          <div className="max-w-[1000px] mx-auto mb-8">
+            <div className="flex justify-between items-center mb-4">
+              <h1 className="font-headline-lg text-headline-lg text-on-surface">Verify Your Identity</h1>
+              <span className="font-label-md text-label-md text-on-surface-variant uppercase tracking-widest">
+                Step 3 of 3
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setStep(2)}
+              className="mb-4 flex items-center gap-1 text-on-surface-variant font-label-md hover:text-primary transition-colors"
+            >
+              <Icon name="arrow_back" className="text-sm" />
+              BACK TO ACCOUNT DETAILS
+            </button>
+            <div className="w-full bg-surface-container-high h-1.5 rounded-full overflow-hidden flex">
+              <div className="bg-primary w-full h-full transition-all duration-500 ease-out" />
+            </div>
+            <div className="flex justify-between mt-3 text-on-surface-variant font-label-md text-label-md">
+              <span className="text-secondary font-bold">Personal Info</span>
+              <span className="text-secondary font-bold">Account Verification</span>
+              <span className="text-primary font-bold">Confirmation</span>
+            </div>
+          </div>
+          <OtpVerification email={contact.email} mobile={contact.mobile} onVerified={complete} />
         </main>
       )}
 
