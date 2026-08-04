@@ -44,3 +44,6 @@ server/src/generated/
 # Coverage
 coverage/
 .nyc_output/
+
+# Local-only reminders
+SMS-OTP-REMINDER.md
