@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import { env } from './config/env';
 import otpRoutes from './routes/otp.routes';
+import authRoutes from './routes/auth.routes';
 import { notFound, errorHandler } from './middleware/error.middleware';
 
 const app = express();
@@ -20,6 +21,7 @@ app.get('/api/health', (_req, res) => {
 });
 
 app.use('/api/otp', otpRoutes);
+app.use('/api/auth', authRoutes);
 
 app.use(notFound);
 app.use(errorHandler);

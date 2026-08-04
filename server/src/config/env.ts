@@ -28,4 +28,13 @@ export const env = {
     twilioAuthToken: process.env.TWILIO_AUTH_TOKEN ?? '',
     twilioPhoneFrom: process.env.TWILIO_PHONE_FROM ?? '',
   },
+  google: {
+    clientId: process.env.GOOGLE_CLIENT_ID ?? '',
+  },
+  abdm: {
+    baseUrl: process.env.ABDM_BASE_URL ?? '',
+    clientId: process.env.ABDM_CLIENT_ID ?? '',
+    clientSecret: process.env.ABDM_CLIENT_SECRET ?? '',
+    facilityId: process.env.ABDM_FACILITY_ID ?? '',
+  },
 };

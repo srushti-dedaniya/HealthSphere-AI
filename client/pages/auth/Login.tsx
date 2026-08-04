@@ -1,9 +1,14 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Icon } from '@/components/ui/Icon';
 import { Button } from '@/components/ui/Button';
+import { HealthIdModal } from '@/components/auth/HealthIdModal';
 import { useAuth } from '@/context/AuthContext';
+import { googleLogin, loginWithCredentials, type HealthIdLoginResult } from '@/services/auth.service';
+import { DEMO_USERS } from '@/services/demoAuth';
 import type { Role } from '@/types/auth';
+
+const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID ?? '';
 
 const ROLE_OPTIONS: Array<{ key: Role; label: string; icon: string }> = [
   { key: 'patient', label: 'Patient', icon: 'person' },
@@ -19,16 +24,73 @@ export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [healthIdOpen, setHealthIdOpen] = useState(false);
+  const googleButtonRef = useRef<HTMLDivElement>(null);
   const { login } = useAuth();
   const navigate = useNavigate();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleGoogleCredential = async (response: { credential: string }) => {
+    setError(null);
+    setSubmitting(true);
+    try {
+      const res = await googleLogin(response.credential);
+      if (!res.data) throw new Error('Login failed. Please try again.');
+      login(res.data.role, res.data.name);
+      navigate(`/${res.data.role}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Google Sign-In failed. Please try again.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!GOOGLE_CLIENT_ID || !googleButtonRef.current) return;
+
+    let cancelled = false;
+    const script = document.createElement('script');
+    script.src = 'https://accounts.google.com/gsi/client';
+    script.async = true;
+    script.defer = true;
+    script.onload = () => {
+      if (cancelled || !window.google || !googleButtonRef.current) return;
+      window.google.accounts.id.initialize({
+        client_id: GOOGLE_CLIENT_ID,
+        callback: handleGoogleCredential,
+      });
+      window.google.accounts.id.renderButton(googleButtonRef.current, {
+        type: 'standard',
+        theme: 'outline',
+        size: 'large',
+        shape: 'pill',
+        text: 'continue_with',
+        width: googleButtonRef.current.clientWidth || 200,
+      });
+    };
+    document.head.appendChild(script);
+    return () => {
+      cancelled = true;
+      document.head.removeChild(script);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const name = email.split('@')[0].replace(/[._-]+/g, ' ');
-    const displayName =
-      name.replace(/\b\w/g, (c) => c.toUpperCase()) || (role === 'doctor' ? 'Dr. Julianne Smith' : 'Alex Thompson');
-    login(role, displayName);
-    navigate(`/${role}`);
+    setError(null);
+    setSubmitting(true);
+    try {
+      const response = await loginWithCredentials(email, password);
+      if (!response.data) throw new Error('Login failed. Please try again.');
+      login(response.data.role, response.data.name);
+      navigate(`/${response.data.role}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Login failed. Please try again.');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -59,7 +121,10 @@ export default function Login() {
                     <button
                       key={option.key}
                       type="button"
-                      onClick={() => setRole(option.key)}
+                      onClick={() => {
+                        setRole(option.key);
+                        setError(null);
+                      }}
                       className={`flex flex-col items-center justify-center py-3 border rounded-xl cursor-pointer transition-all ${
                         selected
                           ? 'bg-primary text-on-primary border-primary shadow-lg shadow-primary/10'
@@ -84,7 +149,10 @@ export default function Login() {
                   id="email"
                   type="email"
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  onChange={(e) => {
+                    setEmail(e.target.value);
+                    setError(null);
+                  }}
                   placeholder="dr.smith@healthsphere.ai"
                   className="w-full pl-12 pr-4 py-3.5 bg-surface-container-low border border-outline-variant rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all font-body-md"
                 />
@@ -106,7 +174,10 @@ export default function Login() {
                   id="password"
                   type={showPassword ? 'text' : 'password'}
                   value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  onChange={(e) => {
+                    setPassword(e.target.value);
+                    setError(null);
+                  }}
                   placeholder="••••••••••••"
                   className="w-full pl-12 pr-12 py-3.5 bg-surface-container-low border border-outline-variant rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all font-body-md"
                 />
@@ -131,8 +202,28 @@ export default function Login() {
               </span>
             </label>
 
-            <Button type="submit" variant="primary" size="lg" className="w-full py-4 font-headline-md text-[18px]">
-              Login to Sphere
+            {error && (
+              <div className="flex items-start gap-2 p-3 rounded-lg bg-error/10 border border-error/30 text-error">
+                <Icon name="error" className="text-[20px] shrink-0" filled />
+                <p className="font-body-sm text-body-sm">{error}</p>
+              </div>
+            )}
+
+            <Button
+              type="submit"
+              variant="primary"
+              size="lg"
+              className="w-full py-4 font-headline-md text-[18px]"
+              disabled={submitting}
+            >
+              {submitting ? (
+                <>
+                  <span className="animate-spin rounded-full h-5 w-5 border-2 border-on-primary border-t-transparent" />
+                  Signing in...
+                </>
+              ) : (
+                'Login to Sphere'
+              )}
             </Button>
 
             <div className="relative py-4">
@@ -145,20 +236,27 @@ export default function Login() {
             </div>
 
             <div className="grid grid-cols-2 gap-4">
+              <div ref={googleButtonRef} className="min-h-[52px] flex items-center justify-center">
+                {!GOOGLE_CLIENT_ID && (
+                  <button
+                    type="button"
+                    disabled
+                    title="Configure VITE_GOOGLE_CLIENT_ID in client/.env to enable Google Sign-In"
+                    className="flex items-center justify-center gap-2 py-3 border border-outline-variant rounded-xl opacity-50 cursor-not-allowed font-body-md"
+                  >
+                    <svg className="w-5 h-5" viewBox="0 0 24 24">
+                      <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4" />
+                      <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" />
+                      <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05" />
+                      <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
+                    </svg>
+                    Google
+                  </button>
+                )}
+              </div>
               <button
                 type="button"
-                className="flex items-center justify-center gap-2 py-3 border border-outline-variant rounded-xl hover:bg-surface-container-low transition-colors font-body-md"
-              >
-                <svg className="w-5 h-5" viewBox="0 0 24 24">
-                  <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4" />
-                  <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" />
-                  <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05" />
-                  <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
-                </svg>
-                Google
-              </button>
-              <button
-                type="button"
+                onClick={() => setHealthIdOpen(true)}
                 className="flex items-center justify-center gap-2 py-3 border border-outline-variant rounded-xl hover:bg-surface-container-low transition-colors font-body-md"
               >
                 <Icon name="health_and_safety" className="text-[20px] text-primary" />
@@ -166,12 +264,34 @@ export default function Login() {
               </button>
             </div>
           </form>
+          <HealthIdModal
+            open={healthIdOpen}
+            onClose={() => setHealthIdOpen(false)}
+            onLogin={(result: HealthIdLoginResult) => {
+              login('doctor', result.name);
+              navigate('/doctor');
+            }}
+          />
           <p className="mt-10 text-center font-body-sm text-body-sm text-on-surface-variant">
             Don&apos;t have an account?{' '}
             <Link className="text-primary font-bold hover:underline" to="/register">
               Request enterprise access
             </Link>
           </p>
+
+          <div className="mt-8 p-4 rounded-xl bg-surface-container-low border border-outline-variant/30">
+            <p className="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider mb-3">
+              Demo accounts
+            </p>
+            <div className="space-y-2">
+              {DEMO_USERS.map((user) => (
+                <p key={user.email} className="font-body-sm text-body-sm text-on-surface-variant break-all">
+                  <span className="font-semibold capitalize text-on-surface">{user.role}</span>{' '}
+                  <span className="font-mono">{user.email}</span> / <span className="font-mono">{user.password}</span>
+                </p>
+              ))}
+            </div>
+          </div>
         </div>
       </section>
 

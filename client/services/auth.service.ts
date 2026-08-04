@@ -1,4 +1,5 @@
 export type OtpChannel = 'email' | 'mobile';
+export type Role = 'patient' | 'doctor' | 'admin';
 
 export interface ApiResponse<T = Record<string, unknown>> {
   success: boolean;
@@ -11,6 +12,24 @@ export interface ApiResponse<T = Record<string, unknown>> {
 
 export interface OtpDelivery extends Record<string, unknown> {
   demo: boolean;
+  otp?: string;
+}
+
+export interface LoginResult {
+  id: number;
+  name: string;
+  email: string;
+  role: Role;
+}
+
+export interface HealthIdLoginResult extends LoginResult {
+  abhaNumber?: string;
+  abdmName?: string;
+}
+
+export interface OtpRequestResult {
+  demo: boolean;
+  txnId?: string;
   otp?: string;
 }
 
@@ -64,4 +83,28 @@ export function verifyEmailOtp(email: string, code: string): Promise<ApiResponse
 
 export function verifyMobileOtp(mobile: string, code: string): Promise<ApiResponse> {
   return request('/api/otp/verify', { channel: 'mobile', mobile, code });
+}
+
+export function loginWithCredentials(email: string, password: string): Promise<ApiResponse<LoginResult>> {
+  return request('/api/auth/login', { email, password });
+}
+
+export function googleLogin(token: string): Promise<ApiResponse<LoginResult>> {
+  return request('/api/auth/google', { token });
+}
+
+export function healthIdRequestOtp(
+  abhaNumber: string,
+  mobile: string,
+): Promise<ApiResponse<OtpRequestResult>> {
+  return request('/api/auth/healthid/request-otp', { abhaNumber, mobile });
+}
+
+export function healthIdVerifyOtp(
+  abhaNumber: string,
+  mobile: string,
+  otp: string,
+  txnId?: string,
+): Promise<ApiResponse<HealthIdLoginResult>> {
+  return request('/api/auth/healthid/verify', { abhaNumber, mobile, otp, txnId });
 }

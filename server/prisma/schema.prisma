@@ -1,0 +1,48 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Patient {
+  id         Int      @id @default(autoincrement())
+  fullName   String
+  email      String   @unique
+  mobile     String?
+  password   String
+  isVerified Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@map("patients")
+}
+
+model Doctor {
+  id         Int      @id @default(autoincrement())
+  fullName   String
+  email      String   @unique
+  mobile     String?
+  healthId   String?  @unique
+  password   String
+  isVerified Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@map("doctors")
+}
+
+model Owner {
+  id         Int      @id @default(autoincrement())
+  fullName   String
+  email      String   @unique
+  mobile     String?
+  password   String
+  isVerified Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@map("owners")
+}

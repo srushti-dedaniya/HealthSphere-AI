@@ -1,5 +1,6 @@
 import type { Request, Response, NextFunction } from 'express';
 import { OtpError } from '../services/otp.service';
+import { ApiError } from '../utils/errors';
 
 export function notFound(_req: Request, res: Response): void {
   res.status(404).json({ success: false, error: 'Endpoint not found.' });
@@ -11,7 +12,7 @@ export function errorHandler(
   res: Response,
   _next: NextFunction,
 ): void {
-  if (err instanceof OtpError) {
+  if (err instanceof OtpError || err instanceof ApiError) {
     res.status(err.statusCode).json({ success: false, error: err.message });
     return;
   }

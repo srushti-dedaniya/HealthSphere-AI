@@ -38,6 +38,9 @@ Thumbs.db
 *.tsbuildinfo
 tsconfig.tsbuildinfo
 
+# Prisma generated client
+server/src/generated/
+
 # Coverage
 coverage/
 .nyc_output/
